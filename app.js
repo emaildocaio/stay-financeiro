@@ -902,6 +902,7 @@ function renderPlanilha() {
   const outras = [
     ['Manutenções', 'Manutenção'],
     ['Compras', 'Compras'],
+    ['Materiais de Limpeza', 'Materiais de Limpeza'],
     ['Lavanderia', 'Lavanderia'],
     ['Impostos', 'Impostos DAS'],
     ['Contador', 'Contador'],
