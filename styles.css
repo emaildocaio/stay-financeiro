@@ -566,6 +566,191 @@ body {
   background: var(--paper-2);
 }
 
+/* =====================================================
+   PLANILHA (espelho do controle financeiro)
+   ===================================================== */
+.planilha-wrap {
+  overflow-x: auto;
+  max-height: 80vh;
+}
+
+.planilha-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.78rem;
+  font-family: var(--font-body);
+}
+
+.planilha-table th,
+.planilha-table td {
+  padding: 0.5rem 0.7rem;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--line);
+}
+
+.planilha-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--paper-2);
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-2);
+  border-bottom: 1px solid var(--line-2);
+  text-align: center;
+}
+
+.planilha-table thead th.year-cell {
+  background: var(--ink);
+  color: white;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-align: center;
+  z-index: 4;
+}
+
+.planilha-table thead th.resumo-col {
+  background: var(--ink-2);
+  color: white;
+}
+
+.planilha-table .pl-row-section,
+.planilha-table .pl-row-line,
+.planilha-table .pl-row-total {
+  background: white;
+}
+
+/* Coluna do bloco/seção (esquerda - 2 cols) */
+.planilha-table td.pl-section-cell {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--ink);
+  color: white;
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+  text-align: center;
+  width: 130px;
+  min-width: 130px;
+  border-right: 1px solid var(--line-2);
+}
+
+.planilha-table td.pl-section-cell.green { background: #064e3b; }
+.planilha-table td.pl-section-cell.red { background: #7f1d1d; }
+.planilha-table td.pl-section-cell.dark { background: var(--ink); }
+.planilha-table td.pl-section-cell.gray { background: var(--ink-3); }
+
+.planilha-table td.pl-label-cell {
+  position: sticky;
+  left: 130px;
+  z-index: 1;
+  background: white;
+  font-weight: 500;
+  color: var(--ink);
+  width: 220px;
+  min-width: 220px;
+  border-right: 1px solid var(--line);
+  text-align: left;
+}
+
+.planilha-table .pl-row-line td {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--ink-2);
+}
+
+.planilha-table .pl-row-line td.pl-label-cell {
+  font-family: var(--font-body);
+  text-align: left;
+}
+
+.planilha-table .pl-row-line td.pl-receita {
+  color: #059669;
+}
+
+.planilha-table .pl-row-line td.pl-despesa {
+  color: var(--danger);
+}
+
+.planilha-table .pl-row-line td.pl-zero {
+  color: var(--ink-4);
+}
+
+.planilha-table .pl-row-total td {
+  background: #f8fafc;
+  font-weight: 700;
+  border-top: 1.5px solid var(--ink);
+  border-bottom: 1.5px solid var(--ink);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--ink);
+}
+
+.planilha-table .pl-row-total td.pl-section-cell {
+  background: var(--ink);
+}
+
+.planilha-table .pl-row-total td.pl-label-cell {
+  background: #f8fafc;
+  font-family: var(--font-body);
+  text-align: left;
+}
+
+.planilha-table .pl-row-total.pl-row-grand td {
+  background: #064e3b;
+  color: white;
+  border-top: 2px solid #022c22;
+  border-bottom: 2px solid #022c22;
+}
+
+.planilha-table .pl-row-total.pl-row-grand td.pl-label-cell {
+  background: #064e3b;
+  color: white;
+}
+
+.planilha-table td.resumo-col {
+  background: var(--paper-2);
+  font-weight: 600;
+  color: var(--ink);
+  border-left: 1.5px solid var(--ink);
+}
+
+.planilha-table .pl-row-line td.resumo-col {
+  color: var(--ink-3);
+  font-style: italic;
+}
+
+.planilha-table .pl-row-total td.resumo-col {
+  font-size: 0.85rem;
+  background: var(--ink);
+  color: white;
+}
+
+.planilha-table .pl-row-total.pl-row-grand td.resumo-col {
+  background: #022c22;
+  color: white;
+}
+
+.planilha-table tbody tr:hover td:not(.pl-section-cell) {
+  background: var(--areia);
+}
+
+@media (max-width: 768px) {
+  .planilha-table { font-size: 0.7rem; }
+  .planilha-table td.pl-section-cell { width: 90px; min-width: 90px; }
+  .planilha-table td.pl-label-cell { left: 90px; width: 160px; min-width: 160px; }
+}
+
 .cell-mes {
   font-weight: 500;
   color: var(--ink);

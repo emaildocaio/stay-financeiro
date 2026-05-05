@@ -43,11 +43,16 @@ const state = {
   resumoMensal: [],
   resumoApto: [],
   despesasCategoria: [],
+  despesasDetalhe: [],
   reservas: [],
   apartamentos: [],
   syncLog: null,
   charts: {},
 };
+
+const APTOS_ORDER = ['IV203', 'IV204', 'BA201', 'BA203', 'BA204'];
+const MESES_LABEL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 // =====================================================
 // UTILS
@@ -78,10 +83,11 @@ function isFuture(dateStr) {
 // =====================================================
 async function fetchAll() {
   try {
-    const [resumo, resumoApto, despCat, reservas, aptos, syncLog] = await Promise.all([
+    const [resumo, resumoApto, despCat, despDet, reservas, aptos, syncLog] = await Promise.all([
       sb.from('dash_v_resumo_mensal').select('*').order('mes', { ascending: true }),
       sb.from('dash_v_resumo_mensal_apto').select('*').order('mes', { ascending: true }),
       sb.from('dash_v_despesas_categoria').select('*').order('mes', { ascending: true }),
+      sb.from('dash_expenses').select('data, apartamento, categoria, valor'),
       sb.from('dash_v_reservas').select('*').order('check_in', { ascending: false }),
       sb.from('dash_apartamentos').select('*').order('codigo'),
       sb.from('dash_sync_log').select('*').order('id', { ascending: false }).limit(1),
@@ -90,12 +96,14 @@ async function fetchAll() {
     if (resumo.error) throw new Error('resumo: ' + resumo.error.message);
     if (resumoApto.error) throw new Error('resumoApto: ' + resumoApto.error.message);
     if (despCat.error) throw new Error('despCat: ' + despCat.error.message);
+    if (despDet.error) throw new Error('despDet: ' + despDet.error.message);
     if (reservas.error) throw new Error('reservas: ' + reservas.error.message);
     if (aptos.error) throw new Error('aptos: ' + aptos.error.message);
 
     state.resumoMensal = resumo.data || [];
     state.resumoApto = resumoApto.data || [];
     state.despesasCategoria = despCat.data || [];
+    state.despesasDetalhe = despDet.data || [];
     state.reservas = reservas.data || [];
     state.apartamentos = aptos.data || [];
     state.syncLog = syncLog.data?.[0] || null;
@@ -683,6 +691,287 @@ function renderLimpezaTable(period) {
 }
 
 // =====================================================
+// PLANILHA (espelho do controle financeiro)
+// =====================================================
+function planilhaCellNum(v, opts = {}) {
+  const isZero = !v || Math.abs(v) < 0.005;
+  if (isZero && opts.allowZero !== true) {
+    return `<td class="pl-zero">R$ 0,00</td>`;
+  }
+  const cls = opts.cls || '';
+  const formatted = 'R$ ' + Number(v).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2, maximumFractionDigits: 2
+  });
+  return `<td class="${cls}">${formatted}</td>`;
+}
+
+function planilhaCellInt(v) {
+  if (!v) return `<td class="pl-zero">0</td>`;
+  return `<td>${v}</td>`;
+}
+
+// Constrói lookup de despesas por (mes, categoria, apartamento)
+function buildDespesasLookup(ano) {
+  const lookup = {};
+  state.despesasDetalhe.forEach(d => {
+    const dt = new Date(d.data + 'T00:00:00');
+    if (dt.getFullYear() !== ano) return;
+    const m = dt.getMonth(); // 0-11
+    const key = `${m}|${d.categoria}|${d.apartamento || 'NULL'}`;
+    lookup[key] = (lookup[key] || 0) + Number(d.valor || 0);
+  });
+  return lookup;
+}
+
+function getDesp(lookup, mes, categoria, apto) {
+  return lookup[`${mes}|${categoria}|${apto || 'NULL'}`] || 0;
+}
+
+function getDespAllAptos(lookup, mes, categoria) {
+  return ['IV203', 'IV204', 'BA201', 'BA203', 'BA204', 'NULL']
+    .reduce((acc, a) => acc + (lookup[`${mes}|${categoria}|${a}`] || 0), 0);
+}
+
+// Internet vem como NULL no banco mas com 2 linhas (BA + IV) por mês
+// Heurística: maior valor = BA, menor = IV
+function getInternetSplit(ano) {
+  const result = {}; // { mes -> { ba, iv } }
+  for (let m = 0; m < 12; m++) result[m] = { ba: 0, iv: 0 };
+
+  const byMes = {};
+  state.despesasDetalhe.forEach(d => {
+    if (d.categoria !== 'Internet') return;
+    const dt = new Date(d.data + 'T00:00:00');
+    if (dt.getFullYear() !== ano) return;
+    const m = dt.getMonth();
+    if (!byMes[m]) byMes[m] = [];
+    byMes[m].push(Number(d.valor || 0));
+  });
+
+  Object.entries(byMes).forEach(([m, vals]) => {
+    vals.sort((a, b) => b - a);
+    result[m].ba = vals[0] || 0;
+    result[m].iv = vals[1] || 0;
+    if (vals.length > 2) {
+      // soma extras na maior
+      result[m].ba += vals.slice(2).reduce((a, v) => a + v, 0);
+    }
+  });
+  return result;
+}
+
+// Receita por apto×mes (pos plataforma menos co-host airbnb auto)
+function getReceitaApto(ano) {
+  const result = {}; // { mes -> { apto -> valor } }
+  for (let m = 0; m < 12; m++) {
+    result[m] = {};
+    APTOS_ORDER.forEach(a => result[m][a] = 0);
+  }
+  const lookup = buildDespesasLookup(ano);
+
+  state.resumoApto.forEach(r => {
+    const dt = new Date(r.mes);
+    if (dt.getFullYear() !== ano) return;
+    const m = dt.getMonth();
+    if (!APTOS_ORDER.includes(r.apartamento)) return;
+    const posPlat = Number(r.receita_pos_plataforma || 0);
+    const cohostAirbnb = getDesp(lookup, m, 'Co-Host Airbnb', r.apartamento);
+    result[m][r.apartamento] = posPlat - cohostAirbnb;
+  });
+  return result;
+}
+
+function getCheckinsApto(ano) {
+  const result = {};
+  for (let m = 0; m < 12; m++) {
+    result[m] = {};
+    APTOS_ORDER.forEach(a => result[m][a] = 0);
+  }
+  state.reservas.forEach(r => {
+    if (!r.check_in) return;
+    const dt = new Date(r.check_in + 'T00:00:00');
+    if (dt.getFullYear() !== ano) return;
+    const m = dt.getMonth();
+    if (APTOS_ORDER.includes(r.apartamento)) {
+      result[m][r.apartamento] = (result[m][r.apartamento] || 0) + 1;
+    }
+  });
+  return result;
+}
+
+function renderPlanilha() {
+  const ano = parseInt(document.getElementById('planilhaAno').value, 10);
+  const lookup = buildDespesasLookup(ano);
+  const internet = getInternetSplit(ano);
+  const receitaApto = getReceitaApto(ano);
+  const checkins = getCheckinsApto(ano);
+
+  const meses = Array.from({ length: 12 }, (_, i) => i);
+  const sumMes = (fn) => meses.map(fn);
+  const sumLine = (arr) => arr.reduce((a, v) => a + v, 0);
+
+  // Helper: gera uma linha de label + 12 valores + resumo
+  const lineRow = (sectionAttrs, label, values, opts = {}) => {
+    const total = sumLine(values);
+    const cls = opts.cls || '';
+    const cells = values.map(v => planilhaCellNum(v, { cls })).join('');
+    const resumo = total > 0 ?
+      `<td class="resumo-col ${cls}">R$ ${total.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>` :
+      `<td class="resumo-col pl-zero">—</td>`;
+    return `<tr class="pl-row-line">${sectionAttrs}<td class="pl-label-cell">${label}</td>${cells}${resumo}</tr>`;
+  };
+
+  const intRow = (sectionAttrs, label, values) => {
+    const total = sumLine(values);
+    const cells = values.map(v => planilhaCellInt(v)).join('');
+    const resumo = total > 0 ?
+      `<td class="resumo-col">${total}</td>` :
+      `<td class="resumo-col pl-zero">—</td>`;
+    return `<tr class="pl-row-line">${sectionAttrs}<td class="pl-label-cell">${label}</td>${cells}${resumo}</tr>`;
+  };
+
+  const totalRow = (sectionAttrs, label, values, opts = {}) => {
+    const total = sumLine(values);
+    const cls = opts.cls || '';
+    const grandCls = opts.grand ? ' pl-row-grand' : '';
+    const cells = values.map(v => planilhaCellNum(v, { allowZero: true, cls })).join('');
+    const resumo = `<td class="resumo-col ${cls}">R$ ${total.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>`;
+    return `<tr class="pl-row-total${grandCls}">${sectionAttrs}<td class="pl-label-cell">${label}</td>${cells}${resumo}</tr>`;
+  };
+
+  // Helper: cria attribute rowspan pra primeira linha do bloco
+  const sectionStart = (label, span, color) =>
+    `<td rowspan="${span}" class="pl-section-cell ${color}">${label}</td>`;
+  const sectionCont = ''; // demais linhas da seção: sem celula (rowspan ocupa)
+
+  let html = '';
+
+  // Header
+  html += '<thead><tr>';
+  html += `<th class="year-cell" colspan="2">${ano}</th>`;
+  MESES_LABEL.forEach(m => { html += `<th>${m}</th>`; });
+  html += `<th class="resumo-col">Resumo</th>`;
+  html += '</tr></thead><tbody>';
+
+  // ===== RECEITA =====
+  const receitaTotalMes = sumMes(m =>
+    APTOS_ORDER.reduce((a, apt) => a + receitaApto[m][apt], 0)
+  );
+  const receitaSpan = APTOS_ORDER.length + 2; // 5 aptos + Resoluções + Total
+  APTOS_ORDER.forEach((apt, i) => {
+    const values = sumMes(m => receitaApto[m][apt]);
+    html += lineRow(
+      i === 0 ? sectionStart('Receita', receitaSpan, 'green') : sectionCont,
+      apt,
+      values,
+      { cls: 'pl-receita' }
+    );
+  });
+  html += lineRow(sectionCont, 'Resoluções', sumMes(() => 0), { cls: 'pl-receita' });
+  html += totalRow(sectionCont, 'Total', receitaTotalMes, { cls: 'pl-receita' });
+
+  // ===== DESPESAS CONDOMÍNIO + LUZ + INTERNET =====
+  const condLuzNetSpan = 5 + 5 + 2 + 1; // Cond×5 + Luz×5 + Internet×2 + Total
+  let firstCondLuzNet = true;
+  APTOS_ORDER.forEach(apt => {
+    const values = sumMes(m => getDesp(lookup, m, 'Condomínio', apt));
+    html += lineRow(
+      firstCondLuzNet ? sectionStart('Despesas<br>Cond + Luz<br>+ Internet', condLuzNetSpan, 'red') : sectionCont,
+      `Condomínio ${apt}`,
+      values,
+      { cls: 'pl-despesa' }
+    );
+    firstCondLuzNet = false;
+  });
+  APTOS_ORDER.forEach(apt => {
+    const values = sumMes(m => getDesp(lookup, m, 'Luz', apt));
+    html += lineRow(sectionCont, `Luz ${apt}`, values, { cls: 'pl-despesa' });
+  });
+  html += lineRow(sectionCont, 'Internet BA', sumMes(m => internet[m].ba), { cls: 'pl-despesa' });
+  html += lineRow(sectionCont, 'Internet IV', sumMes(m => internet[m].iv), { cls: 'pl-despesa' });
+
+  const condLuzNetTotal = sumMes(m => {
+    const cond = APTOS_ORDER.reduce((a, apt) => a + getDesp(lookup, m, 'Condomínio', apt), 0);
+    const luz = APTOS_ORDER.reduce((a, apt) => a + getDesp(lookup, m, 'Luz', apt), 0);
+    const net = internet[m].ba + internet[m].iv;
+    return cond + luz + net;
+  });
+  html += totalRow(sectionCont, 'Total', condLuzNetTotal, { cls: 'pl-despesa' });
+
+  // ===== OUTRAS DESPESAS =====
+  const outras = [
+    ['Manutenções', 'Manutenção'],
+    ['Compras', 'Compras'],
+    ['Lavanderia', 'Lavanderia'],
+    ['Impostos', 'Impostos DAS'],
+    ['Contador', 'Contador'],
+    ['Comissão Co-Host Booking.com', 'Co-Host Booking'],
+  ];
+  const outrasSpan = outras.length + 1;
+  outras.forEach(([label, cat], i) => {
+    const values = sumMes(m => getDespAllAptos(lookup, m, cat));
+    html += lineRow(
+      i === 0 ? sectionStart('Outras<br>Despesas', outrasSpan, 'red') : sectionCont,
+      label, values, { cls: 'pl-despesa' }
+    );
+  });
+  const outrasTotal = sumMes(m => outras.reduce((a, [, cat]) => a + getDespAllAptos(lookup, m, cat), 0));
+  html += totalRow(sectionCont, 'Total', outrasTotal, { cls: 'pl-despesa' });
+
+  // ===== DESPESAS COM FERRAMENTAS =====
+  const ferr = [
+    ['Stays Mensalidade', 'Stays Mensalidade'],
+    ['Stays Comissão', 'Stays Comissão'],
+    ['Pricelabs Mensalidade', 'PriceLabs/Beyond Comissão'],
+  ];
+  const ferrSpan = ferr.length + 1;
+  ferr.forEach(([label, cat], i) => {
+    const values = sumMes(m => getDespAllAptos(lookup, m, cat));
+    html += lineRow(
+      i === 0 ? sectionStart('Despesas com<br>Ferramentas', ferrSpan, 'red') : sectionCont,
+      label, values, { cls: 'pl-despesa' }
+    );
+  });
+  const ferrTotal = sumMes(m => ferr.reduce((a, [, cat]) => a + getDespAllAptos(lookup, m, cat), 0));
+  html += totalRow(sectionCont, 'Total', ferrTotal, { cls: 'pl-despesa' });
+
+  // ===== DESPESA LIMPEZA =====
+  const limpSpan = APTOS_ORDER.length + 2; // 5 aptos + Valor Faxina + Total
+  APTOS_ORDER.forEach((apt, i) => {
+    const values = sumMes(m => checkins[m][apt]);
+    html += intRow(
+      i === 0 ? sectionStart('Despesa<br>Limpeza', limpSpan, 'red') : sectionCont,
+      `Check In ${apt}`,
+      values
+    );
+  });
+  // Valor da Faxina = faxina total / total checkins (valor unitário aproximado)
+  const faxinaUnit = sumMes(m => {
+    const fax = getDespAllAptos(lookup, m, 'Faxina');
+    const totCk = APTOS_ORDER.reduce((a, apt) => a + checkins[m][apt], 0);
+    return totCk > 0 ? fax / totCk : 0;
+  });
+  html += lineRow(sectionCont, 'Valor da Faxina', faxinaUnit, { cls: 'pl-despesa' });
+  const limpTotal = sumMes(m => getDespAllAptos(lookup, m, 'Faxina'));
+  html += totalRow(sectionCont, 'Total', limpTotal, { cls: 'pl-despesa' });
+
+  // ===== IMPOSTOS DAS (referência) =====
+  const dasTotal = sumMes(m => getDespAllAptos(lookup, m, 'Impostos DAS'));
+  html += totalRow(sectionStart('Impostos DAS', 1, 'red'), 'Total', dasTotal, { cls: 'pl-despesa' });
+
+  // ===== RECEITA - DESPESA =====
+  // Soma única (sem duplicar Impostos DAS)
+  const resultado = sumMes(m =>
+    receitaTotalMes[m] - condLuzNetTotal[m] - outrasTotal[m] - ferrTotal[m] - limpTotal[m]
+  );
+  html += totalRow(sectionStart('Receita -<br>Despesa', 1, 'green'), 'Total', resultado, { grand: true });
+
+  html += '</tbody>';
+
+  document.getElementById('planilhaTable').innerHTML = html;
+}
+
+// =====================================================
 // RESERVAS
 // =====================================================
 function populateAptoFilter() {
@@ -877,6 +1166,9 @@ function setupFilters() {
       renderLimpezaTable(p.dataset.period);
     });
   });
+
+  // Seletor de ano da planilha
+  document.getElementById('planilhaAno')?.addEventListener('change', renderPlanilha);
 }
 
 // =====================================================
@@ -922,6 +1214,7 @@ function renderAll() {
   renderApartamentos();
   renderDespesas();
   renderLimpeza();
+  renderPlanilha();
   renderReservas();
 }
 
