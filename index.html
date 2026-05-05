@@ -35,6 +35,7 @@
       <button class="tab-btn active" data-tab="overview">Visão Geral</button>
       <button class="tab-btn" data-tab="apartamentos">Por Apartamento</button>
       <button class="tab-btn" data-tab="despesas">Despesas</button>
+      <button class="tab-btn" data-tab="limpeza">Limpeza &amp; Lavanderia</button>
       <button class="tab-btn" data-tab="reservas">Reservas</button>
     </div>
   </nav>
@@ -163,6 +164,85 @@
         </div>
         <div class="chart-container">
           <canvas id="chartDespesasStack"></canvas>
+        </div>
+      </div>
+
+      <!-- Tabela mensal de despesas (pivot por categoria) -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Planilha mensal por categoria</h2>
+          <div class="filter-pills" id="despesasPivotFilter">
+            <button class="pill active" data-period="12m">Últimos 12m</button>
+            <button class="pill" data-period="ytd">YTD</button>
+            <button class="pill" data-period="all">Tudo</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table data-table-pivot">
+            <thead id="despesasPivotThead"></thead>
+            <tbody id="despesasPivotTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========== TAB: LIMPEZA & LAVANDERIA =========== -->
+    <section class="tab-content" id="tab-limpeza">
+      <div class="kpi-grid">
+        <div class="kpi kpi-despesa">
+          <span class="kpi-label">Materiais de Limpeza · YTD</span>
+          <span class="kpi-value" id="kpiMateriaisYtd">—</span>
+          <span class="kpi-sub" id="kpiMateriaisYtdSub">—</span>
+        </div>
+        <div class="kpi kpi-despesa">
+          <span class="kpi-label">Lavanderia · YTD</span>
+          <span class="kpi-value" id="kpiLavanderiaYtd">—</span>
+          <span class="kpi-sub" id="kpiLavanderiaYtdSub">—</span>
+        </div>
+        <div class="kpi kpi-resultado">
+          <span class="kpi-label">Total combinado · YTD</span>
+          <span class="kpi-value" id="kpiLimpezaTotalYtd">—</span>
+          <span class="kpi-sub" id="kpiLimpezaTotalYtdSub">—</span>
+        </div>
+        <div class="kpi kpi-margem">
+          <span class="kpi-label">Média mensal</span>
+          <span class="kpi-value" id="kpiLimpezaMediaMes">—</span>
+          <span class="kpi-sub" id="kpiLimpezaMediaMesSub">Materiais + Lavanderia</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Materiais &amp; Lavanderia por mês</h2>
+          <span class="card-subtitle">Últimos 12 meses</span>
+        </div>
+        <div class="chart-container">
+          <canvas id="chartLimpeza"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Detalhe mensal</h2>
+          <div class="filter-pills" id="limpezaFilter">
+            <button class="pill active" data-period="12m">Últimos 12m</button>
+            <button class="pill" data-period="ytd">YTD</button>
+            <button class="pill" data-period="all">Tudo</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Mês</th>
+                <th class="num">Materiais de Limpeza</th>
+                <th class="num">Lavanderia</th>
+                <th class="num">Total</th>
+                <th class="num">% do mês</th>
+              </tr>
+            </thead>
+            <tbody id="limpezaTbody"></tbody>
+          </table>
         </div>
       </div>
     </section>

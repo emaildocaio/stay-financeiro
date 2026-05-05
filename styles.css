@@ -532,6 +532,40 @@ body {
   color: var(--ink);
 }
 
+/* Tabela pivot (muitas colunas) */
+.data-table-pivot {
+  font-size: 0.82rem;
+}
+
+.data-table-pivot th,
+.data-table-pivot td {
+  padding: 0.6rem 0.85rem;
+}
+
+.data-table-pivot tbody td:first-child {
+  position: sticky;
+  left: 0;
+  background: white;
+  z-index: 1;
+  border-right: 1px solid var(--line);
+}
+
+.data-table-pivot thead th:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--paper-2);
+  z-index: 2;
+  border-right: 1px solid var(--line);
+}
+
+.data-table-pivot tbody tr:hover td:first-child {
+  background: var(--paper-2);
+}
+
+.data-table-pivot tbody tr.total-row td:first-child {
+  background: var(--paper-2);
+}
+
 .cell-mes {
   font-weight: 500;
   color: var(--ink);

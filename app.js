@@ -475,6 +475,211 @@ function renderDespesas() {
       },
     }
   });
+
+  // Tabela pivot mensal por categoria (default: 12m)
+  renderDespesasPivot('12m');
+}
+
+// =====================================================
+// PIVOT MENSAL — DESPESAS
+// =====================================================
+function filterDespesasByPeriod(period) {
+  if (period === 'all') return state.despesasCategoria.slice();
+  if (period === 'ytd') {
+    const yearStart = new Date(new Date().getFullYear(), 0, 1);
+    return state.despesasCategoria.filter(r => new Date(r.mes) >= yearStart);
+  }
+  // 12m
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - 12);
+  return state.despesasCategoria.filter(r => new Date(r.mes) >= cutoff);
+}
+
+function renderDespesasPivot(period) {
+  const data = filterDespesasByPeriod(period);
+  const meses = [...new Set(data.map(r => r.mes))].sort();
+  const cats = [...new Set(data.map(r => r.categoria))].sort();
+
+  // Total YTD/período por categoria pra ordenar
+  const totaisCat = {};
+  cats.forEach(c => {
+    totaisCat[c] = data
+      .filter(r => r.categoria === c)
+      .reduce((acc, r) => acc + Number(r.total || 0), 0);
+  });
+  const catsOrd = cats.slice().sort((a, b) => totaisCat[b] - totaisCat[a]);
+
+  // Lookup mes×categoria
+  const lookup = {};
+  data.forEach(r => {
+    lookup[`${r.mes}|${r.categoria}`] = Number(r.total || 0);
+  });
+
+  // Header
+  const thead = document.getElementById('despesasPivotThead');
+  thead.innerHTML = '';
+  const hr = document.createElement('tr');
+  hr.innerHTML = '<th>Categoria</th>' +
+    meses.map(m => `<th class="num">${fmt.mes(m.slice(0, 7))}</th>`).join('') +
+    '<th class="num">Total</th>';
+  thead.appendChild(hr);
+
+  // Body
+  const tbody = document.getElementById('despesasPivotTbody');
+  tbody.innerHTML = '';
+  catsOrd.forEach(cat => {
+    const tr = document.createElement('tr');
+    const cells = meses.map(m => {
+      const v = lookup[`${m}|${cat}`] || 0;
+      return `<td class="num">${v ? fmt.brl(v) : '<span style="color:var(--ink-4)">—</span>'}</td>`;
+    }).join('');
+    tr.innerHTML = `<td class="cell-mes">${cat}</td>${cells}<td class="num"><strong>${fmt.brl(totaisCat[cat])}</strong></td>`;
+    tbody.appendChild(tr);
+  });
+
+  // Totalizador por mês
+  const totRow = document.createElement('tr');
+  totRow.className = 'total-row';
+  let grand = 0;
+  const totCells = meses.map(m => {
+    const sumMes = catsOrd.reduce((acc, c) => acc + (lookup[`${m}|${c}`] || 0), 0);
+    grand += sumMes;
+    return `<td class="num">${fmt.brl(sumMes)}</td>`;
+  }).join('');
+  totRow.innerHTML = `<td>Total</td>${totCells}<td class="num">${fmt.brl(grand)}</td>`;
+  tbody.appendChild(totRow);
+}
+
+// =====================================================
+// LIMPEZA & LAVANDERIA
+// =====================================================
+const LIMPEZA_CATS = ['Materiais de Limpeza', 'Lavanderia'];
+
+function renderLimpeza() {
+  const yearStart = new Date(new Date().getFullYear(), 0, 1);
+  const ytd = state.despesasCategoria.filter(
+    r => LIMPEZA_CATS.includes(r.categoria) && new Date(r.mes) >= yearStart
+  );
+
+  const totMat = ytd.filter(r => r.categoria === 'Materiais de Limpeza')
+    .reduce((a, r) => a + Number(r.total || 0), 0);
+  const totLav = ytd.filter(r => r.categoria === 'Lavanderia')
+    .reduce((a, r) => a + Number(r.total || 0), 0);
+  const totSum = totMat + totLav;
+  const mesesYtd = new Set(ytd.map(r => r.mes)).size || 1;
+
+  document.getElementById('kpiMateriaisYtd').textContent = fmt.brl(totMat);
+  document.getElementById('kpiMateriaisYtdSub').textContent =
+    `R$ ${(totMat / mesesYtd).toLocaleString('pt-BR', {maximumFractionDigits: 0})}/mês`;
+
+  document.getElementById('kpiLavanderiaYtd').textContent = fmt.brl(totLav);
+  document.getElementById('kpiLavanderiaYtdSub').textContent =
+    `R$ ${(totLav / mesesYtd).toLocaleString('pt-BR', {maximumFractionDigits: 0})}/mês`;
+
+  document.getElementById('kpiLimpezaTotalYtd').textContent = fmt.brl(totSum);
+  const matPct = totSum > 0 ? (totMat / totSum * 100) : 0;
+  document.getElementById('kpiLimpezaTotalYtdSub').textContent =
+    `Materiais ${fmt.pct(matPct)} · Lavanderia ${fmt.pct(100 - matPct)}`;
+
+  document.getElementById('kpiLimpezaMediaMes').textContent = fmt.brl(totSum / mesesYtd);
+
+  renderLimpezaChart();
+  renderLimpezaTable('12m');
+}
+
+function renderLimpezaChart() {
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - 12);
+  const data = state.despesasCategoria.filter(
+    r => LIMPEZA_CATS.includes(r.categoria) && new Date(r.mes) >= cutoff
+  );
+  const meses = [...new Set(data.map(r => r.mes))].sort();
+  const labels = meses.map(m => fmt.mes(m.slice(0, 7)));
+
+  const seriesFor = (cat) => meses.map(m => {
+    const r = data.find(x => x.mes === m && x.categoria === cat);
+    return r ? Number(r.total) : 0;
+  });
+
+  const ctx = document.getElementById('chartLimpeza').getContext('2d');
+  if (state.charts.limpeza) state.charts.limpeza.destroy();
+  state.charts.limpeza = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Materiais de Limpeza',
+          data: seriesFor('Materiais de Limpeza'),
+          backgroundColor: CATEGORY_COLORS['Materiais de Limpeza'] + 'cc',
+          borderColor: CATEGORY_COLORS['Materiais de Limpeza'],
+          borderRadius: 4,
+        },
+        {
+          label: 'Lavanderia',
+          data: seriesFor('Lavanderia'),
+          backgroundColor: CATEGORY_COLORS['Lavanderia'] + 'cc',
+          borderColor: CATEGORY_COLORS['Lavanderia'],
+          borderRadius: 4,
+        },
+      ]
+    },
+    options: chartOptions(),
+  });
+}
+
+function renderLimpezaTable(period) {
+  const data = filterDespesasByPeriod(period)
+    .filter(r => LIMPEZA_CATS.includes(r.categoria));
+  const meses = [...new Set(data.map(r => r.mes))].sort();
+
+  // Total geral de despesas no período (todas as categorias) pra calcular % do mês
+  const totalMesGeral = {};
+  filterDespesasByPeriod(period).forEach(r => {
+    totalMesGeral[r.mes] = (totalMesGeral[r.mes] || 0) + Number(r.total || 0);
+  });
+
+  const tbody = document.getElementById('limpezaTbody');
+  tbody.innerHTML = '';
+
+  let totMat = 0, totLav = 0, totGeralPeriodo = 0;
+
+  meses.forEach(m => {
+    const mat = data.find(r => r.mes === m && r.categoria === 'Materiais de Limpeza');
+    const lav = data.find(r => r.mes === m && r.categoria === 'Lavanderia');
+    const vMat = mat ? Number(mat.total) : 0;
+    const vLav = lav ? Number(lav.total) : 0;
+    const subtotal = vMat + vLav;
+    const pct = totalMesGeral[m] > 0 ? (subtotal / totalMesGeral[m] * 100) : 0;
+
+    totMat += vMat;
+    totLav += vLav;
+    totGeralPeriodo += totalMesGeral[m] || 0;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="cell-mes">${fmt.mes(m.slice(0, 7))}</td>
+      <td class="num">${fmt.brl(vMat)}</td>
+      <td class="num">${fmt.brl(vLav)}</td>
+      <td class="num"><strong>${fmt.brl(subtotal)}</strong></td>
+      <td class="num">${fmt.pct(pct)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // Totalizador
+  const totSum = totMat + totLav;
+  const totPct = totGeralPeriodo > 0 ? (totSum / totGeralPeriodo * 100) : 0;
+  const totRow = document.createElement('tr');
+  totRow.className = 'total-row';
+  totRow.innerHTML = `
+    <td>Total</td>
+    <td class="num">${fmt.brl(totMat)}</td>
+    <td class="num">${fmt.brl(totLav)}</td>
+    <td class="num"><strong>${fmt.brl(totSum)}</strong></td>
+    <td class="num">${fmt.pct(totPct)}</td>
+  `;
+  tbody.appendChild(totRow);
 }
 
 // =====================================================
@@ -654,6 +859,24 @@ function setupFilters() {
   ['filterPartner', 'filterApto', 'filterPeriodo'].forEach(id => {
     document.getElementById(id).addEventListener('change', renderReservas);
   });
+
+  // Filtro pivot mensal de despesas
+  document.querySelectorAll('#despesasPivotFilter .pill').forEach(p => {
+    p.addEventListener('click', () => {
+      document.querySelectorAll('#despesasPivotFilter .pill').forEach(b => b.classList.remove('active'));
+      p.classList.add('active');
+      renderDespesasPivot(p.dataset.period);
+    });
+  });
+
+  // Filtro tabela detalhe Limpeza & Lavanderia
+  document.querySelectorAll('#limpezaFilter .pill').forEach(p => {
+    p.addEventListener('click', () => {
+      document.querySelectorAll('#limpezaFilter .pill').forEach(b => b.classList.remove('active'));
+      p.classList.add('active');
+      renderLimpezaTable(p.dataset.period);
+    });
+  });
 }
 
 // =====================================================
@@ -698,6 +921,7 @@ function renderAll() {
   renderOverview();
   renderApartamentos();
   renderDespesas();
+  renderLimpeza();
   renderReservas();
 }
 
