@@ -46,6 +46,9 @@ const state = {
   despesasDetalhe: [],
   reservas: [],
   apartamentos: [],
+  estoque: [],
+  consumoEstimado: [],
+  compras: [],
   syncLog: null,
   charts: {},
 };
@@ -83,7 +86,7 @@ function isFuture(dateStr) {
 // =====================================================
 async function fetchAll() {
   try {
-    const [resumo, resumoApto, despCat, despDet, reservas, aptos, syncLog] = await Promise.all([
+    const [resumo, resumoApto, despCat, despDet, reservas, aptos, syncLog, estoque, consumo, compras] = await Promise.all([
       sb.from('dash_v_resumo_mensal').select('*').order('mes', { ascending: true }),
       sb.from('dash_v_resumo_mensal_apto').select('*').order('mes', { ascending: true }),
       sb.from('dash_v_despesas_categoria').select('*').order('mes', { ascending: true }),
@@ -91,6 +94,9 @@ async function fetchAll() {
       sb.from('dash_v_reservas').select('*').order('check_in', { ascending: false }),
       sb.from('dash_apartamentos').select('*').order('codigo'),
       sb.from('dash_sync_log').select('*').order('id', { ascending: false }).limit(1),
+      sb.from('dash_v_estoque_completo').select('*'),
+      sb.from('dash_v_consumo_estimado').select('*').order('mes', { ascending: true }),
+      sb.from('dash_estoque_movimentos').select('*').eq('tipo', 'entrada').order('data', { ascending: false }),
     ]);
 
     if (resumo.error) throw new Error('resumo: ' + resumo.error.message);
@@ -107,6 +113,9 @@ async function fetchAll() {
     state.reservas = reservas.data || [];
     state.apartamentos = aptos.data || [];
     state.syncLog = syncLog.data?.[0] || null;
+    state.estoque = estoque?.data || [];
+    state.consumoEstimado = consumo?.data || [];
+    state.compras = compras?.data || [];
     
     return true;
   } catch (e) {
@@ -1217,6 +1226,12 @@ function setupFilters() {
 
   // Seletor de ano da planilha
   document.getElementById('planilhaAno')?.addEventListener('change', renderPlanilha);
+
+  // Filtros estoque
+  ['estoqueFilterSku', 'estoqueFilterPeriodo'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', renderConsumoApto);
+  });
 }
 
 // =====================================================
@@ -1264,6 +1279,7 @@ function renderAll() {
   renderLimpeza();
   renderPlanilha();
   renderReservas();
+  renderEstoque();
 }
 
 async function init() {
@@ -1277,6 +1293,345 @@ async function init() {
   renderAll();
   
   document.getElementById('btnRefresh').addEventListener('click', refreshData);
+}
+
+// =====================================================
+// ESTOQUE
+// =====================================================
+const SKU_LABELS = {
+  'DESINF': { nome: 'Desinfetante', icon: '🧴', unidade: 'L' },
+  'AGUA_SAN': { nome: 'Água Sanitária', icon: '🧪', unidade: 'L' },
+  'SACO_GRD': { nome: 'Saco Grande (100L)', icon: '🛍️', unidade: 'un' },
+  'SACO_PEQ': { nome: 'Saco Pequeno (Bobina)', icon: '🛍️', unidade: 'un' },
+  'ESPONJA': { nome: 'Esponja', icon: '🧽', unidade: 'un' },
+  'SABAO_LIQ': { nome: 'Sabão Líquido', icon: '🧼', unidade: 'L' },
+  'OUTROS_LIMP': { nome: 'Outros (panos, baldes)', icon: '🧹', unidade: 'un' },
+};
+
+function getEstoqueStatus(item) {
+  if (!item.consumo_por_reserva || item.consumo_por_reserva == 0) return 'unknown';
+  const ultimosMeses = state.consumoEstimado.filter(c => {
+    const cutoff = new Date(); cutoff.setMonth(cutoff.getMonth() - 3);
+    return new Date(c.mes) >= cutoff && c.sku === item.sku;
+  });
+  if (!ultimosMeses.length) return 'healthy';
+
+  const consumoMedioMensal = ultimosMeses.reduce((a, c) => a + Number(c.qty_estimada), 0) / 3;
+  if (consumoMedioMensal === 0) return 'healthy';
+
+  const diasRestantes = (Number(item.saldo_estimado) / consumoMedioMensal) * 30;
+
+  if (diasRestantes < 15) return 'critical';
+  if (diasRestantes < 45) return 'warning';
+  return 'healthy';
+}
+
+function getDiasRestantes(item) {
+  if (!item.consumo_por_reserva || item.consumo_por_reserva == 0) return null;
+  const ultimosMeses = state.consumoEstimado.filter(c => {
+    const cutoff = new Date(); cutoff.setMonth(cutoff.getMonth() - 3);
+    return new Date(c.mes) >= cutoff && c.sku === item.sku;
+  });
+  if (!ultimosMeses.length) return null;
+  const consumoMedioMensal = ultimosMeses.reduce((a, c) => a + Number(c.qty_estimada), 0) / 3;
+  if (consumoMedioMensal === 0) return null;
+  return Math.round((Number(item.saldo_estimado) / consumoMedioMensal) * 30);
+}
+
+function renderEstoqueAlerts() {
+  const container = document.getElementById('estoqueAlerts');
+  container.innerHTML = '';
+
+  const alerts = [];
+
+  state.estoque.forEach(item => {
+    const status = getEstoqueStatus(item);
+    const dias = getDiasRestantes(item);
+    if (status === 'critical' && dias !== null) {
+      alerts.push({
+        type: 'critical',
+        icon: '⚠',
+        title: `${SKU_LABELS[item.sku]?.nome || item.nome} acabando!`,
+        text: `Saldo: ${Number(item.saldo_estimado).toFixed(1)} ${item.unidade} · vai durar ~${dias} dias`,
+      });
+    } else if (status === 'warning' && dias !== null) {
+      alerts.push({
+        type: 'warning',
+        icon: '⚡',
+        title: `${SKU_LABELS[item.sku]?.nome || item.nome}: planejar reposição`,
+        text: `Saldo: ${Number(item.saldo_estimado).toFixed(1)} ${item.unidade} · vai durar ~${dias} dias`,
+      });
+    }
+  });
+
+  const comprasRecentes = state.compras.filter(c => {
+    const dt = new Date(c.data + 'T00:00:00');
+    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 10);
+    return dt >= cutoff;
+  });
+  if (comprasRecentes.length > 0) {
+    const valor = comprasRecentes.reduce((a, c) => a + Number(c.valor_total), 0);
+    alerts.unshift({
+      type: 'info',
+      icon: '✓',
+      title: `Compra recente: ${comprasRecentes.length} ${comprasRecentes.length === 1 ? 'item' : 'itens'} no estoque`,
+      text: `R$ ${valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})} em produtos chegando ou recém-chegados`,
+    });
+  }
+
+  alerts.forEach(a => {
+    const div = document.createElement('div');
+    div.className = `estoque-alert ${a.type}`;
+    div.innerHTML = `
+      <span class="estoque-alert-icon">${a.icon}</span>
+      <div class="estoque-alert-body">
+        <span class="estoque-alert-title">${a.title}</span>
+        <span class="estoque-alert-text">${a.text}</span>
+      </div>
+    `;
+    container.appendChild(div);
+  });
+}
+
+function renderEstoqueCards() {
+  const container = document.getElementById('estoqueCards');
+  container.innerHTML = '';
+
+  const ordem = ['DESINF', 'AGUA_SAN', 'SACO_GRD', 'SACO_PEQ', 'ESPONJA', 'SABAO_LIQ', 'OUTROS_LIMP'];
+  const sortedItems = [...state.estoque].sort((a, b) => {
+    return (ordem.indexOf(a.sku) - ordem.indexOf(b.sku));
+  });
+
+  sortedItems.forEach(item => {
+    const status = getEstoqueStatus(item);
+    const dias = getDiasRestantes(item);
+    const meta = SKU_LABELS[item.sku] || { nome: item.nome, icon: '📦', unidade: item.unidade };
+
+    const saldoTotal = Number(item.saldo_estimado);
+    const compradoTotal = Number(item.comprado_total);
+    const percentRestante = compradoTotal > 0 ? Math.min(100, (saldoTotal / compradoTotal) * 100) : 0;
+
+    let statusLabel = '';
+    if (status === 'critical') statusLabel = 'ACABANDO';
+    else if (status === 'warning') statusLabel = 'PLANEJAR';
+    else if (status === 'healthy') statusLabel = 'OK';
+    else statusLabel = 'CALIBRANDO';
+
+    let projecao = '';
+    if (dias !== null) {
+      if (dias < 30) projecao = `Vai durar ~${dias} dias`;
+      else if (dias < 365) projecao = `Vai durar ~${Math.round(dias/30)} meses`;
+      else projecao = `Vai durar ~${(dias/365).toFixed(1)} anos`;
+    } else {
+      projecao = 'Consumo não calibrado';
+    }
+
+    const card = document.createElement('div');
+    card.className = `estoque-card ${status}`;
+    card.innerHTML = `
+      <div class="estoque-card-header">
+        <span class="estoque-card-title">${meta.icon} ${meta.nome}</span>
+        <span class="estoque-card-status ${status}">${statusLabel}</span>
+      </div>
+      <div class="estoque-saldo">
+        ${saldoTotal.toLocaleString('pt-BR', {maximumFractionDigits: 1})}
+        <span class="estoque-saldo-unit">${item.unidade}</span>
+      </div>
+      <div class="estoque-projecao">${projecao}</div>
+      <div class="estoque-bar">
+        <div class="estoque-bar-fill ${status}" style="width: ${percentRestante}%"></div>
+      </div>
+      <div class="estoque-stats">
+        <div class="estoque-stat">
+          <span class="estoque-stat-label">Comprado</span>
+          <span class="estoque-stat-value">${compradoTotal.toLocaleString('pt-BR', {maximumFractionDigits: 0})} ${item.unidade}</span>
+        </div>
+        <div class="estoque-stat">
+          <span class="estoque-stat-label">Consumido</span>
+          <span class="estoque-stat-value">${Number(item.consumido_estimado).toLocaleString('pt-BR', {maximumFractionDigits: 0})} ${item.unidade}</span>
+        </div>
+        <div class="estoque-stat">
+          <span class="estoque-stat-label">Em estoque</span>
+          <span class="estoque-stat-value">R$ ${Number(item.valor_em_estoque).toLocaleString('pt-BR', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>
+        </div>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function renderConsumoApto() {
+  const skuEl = document.getElementById('estoqueFilterSku');
+  if (!skuEl) return;
+  const sku = skuEl.value;
+  const periodo = document.getElementById('estoqueFilterPeriodo').value;
+
+  const meta = SKU_LABELS[sku] || { nome: sku, unidade: '' };
+
+  let data = state.consumoEstimado.filter(c => c.sku === sku);
+
+  const now = new Date();
+  if (periodo === '6m') {
+    const cutoff = new Date(); cutoff.setMonth(cutoff.getMonth() - 6);
+    data = data.filter(c => new Date(c.mes) >= cutoff);
+  } else if (periodo === '12m') {
+    const cutoff = new Date(); cutoff.setMonth(cutoff.getMonth() - 12);
+    data = data.filter(c => new Date(c.mes) >= cutoff);
+  } else if (periodo === 'ytd') {
+    const yearStart = new Date(now.getFullYear(), 0, 1);
+    data = data.filter(c => new Date(c.mes) >= yearStart);
+  }
+  data = data.filter(c => new Date(c.mes) <= now);
+
+  const meses = [...new Set(data.map(c => c.mes))].sort();
+  const aptos = ['IV203', 'IV204', 'BA201', 'BA203', 'BA204'];
+  const pivot = {};
+  meses.forEach(m => {
+    pivot[m] = {};
+    aptos.forEach(a => pivot[m][a] = 0);
+  });
+  data.forEach(c => {
+    if (pivot[c.mes]) pivot[c.mes][c.apartamento] = Number(c.qty_estimada);
+  });
+
+  const tbody = document.getElementById('consumoTbody');
+  tbody.innerHTML = '';
+
+  const totaisAptos = { IV203: 0, IV204: 0, BA201: 0, BA203: 0, BA204: 0 };
+  let totalGeral = 0;
+
+  meses.forEach(mes => {
+    const row = pivot[mes];
+    const total = aptos.reduce((a, k) => a + row[k], 0);
+    totalGeral += total;
+    aptos.forEach(a => totaisAptos[a] += row[a]);
+
+    const tr = document.createElement('tr');
+    const fmtV = (v) => v > 0 ? v.toLocaleString('pt-BR', {maximumFractionDigits: 1}) : '—';
+    tr.innerHTML = `
+      <td class="cell-mes">${fmt.mes(mes.slice(0, 7))}</td>
+      <td class="num">${fmtV(row.IV203)}</td>
+      <td class="num">${fmtV(row.IV204)}</td>
+      <td class="num">${fmtV(row.BA201)}</td>
+      <td class="num">${fmtV(row.BA203)}</td>
+      <td class="num">${fmtV(row.BA204)}</td>
+      <td class="num"><strong>${fmtV(total)}</strong></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  if (meses.length > 0) {
+    const tr = document.createElement('tr');
+    tr.className = 'total-row';
+    const fmtT = (v) => v.toLocaleString('pt-BR', {maximumFractionDigits: 1});
+    tr.innerHTML = `
+      <td><strong>Total</strong></td>
+      <td class="num">${fmtT(totaisAptos.IV203)}</td>
+      <td class="num">${fmtT(totaisAptos.IV204)}</td>
+      <td class="num">${fmtT(totaisAptos.BA201)}</td>
+      <td class="num">${fmtT(totaisAptos.BA203)}</td>
+      <td class="num">${fmtT(totaisAptos.BA204)}</td>
+      <td class="num"><strong>${fmtT(totalGeral)}</strong></td>
+    `;
+    tbody.appendChild(tr);
+  }
+
+  const ctx = document.getElementById('chartConsumoApto').getContext('2d');
+  if (state.charts.consumoApto) state.charts.consumoApto.destroy();
+
+  const aptColors = {
+    'IV203': COLORS.azulProfundo,
+    'IV204': COLORS.turquesa,
+    'BA201': COLORS.coral,
+    'BA203': '#92400e',
+    'BA204': '#7c3aed',
+  };
+
+  const datasets = aptos.map(apt => ({
+    label: apt,
+    data: meses.map(m => pivot[m][apt]),
+    backgroundColor: aptColors[apt],
+    borderColor: aptColors[apt],
+    borderWidth: 0,
+    borderRadius: 3,
+  }));
+
+  state.charts.consumoApto = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: meses.map(m => fmt.mes(m.slice(0, 7))),
+      datasets,
+    },
+    options: {
+      ...chartOptions(),
+      scales: {
+        y: {
+          beginAtZero: true,
+          stacked: false,
+          grid: { color: COLORS.line, drawBorder: false },
+          ticks: {
+            font: { family: 'JetBrains Mono', size: 11 },
+            color: COLORS.ink3,
+            callback: v => v.toLocaleString('pt-BR', {maximumFractionDigits: 0}) + ' ' + meta.unidade,
+          },
+          title: {
+            display: true,
+            text: `${meta.nome} (${meta.unidade})`,
+            font: { family: 'Inter', size: 11, weight: '500' },
+            color: COLORS.ink3,
+          }
+        },
+        x: { grid: { display: false }, ticks: { font: { family: 'JetBrains Mono', size: 11 }, color: COLORS.ink3 } },
+      },
+      plugins: {
+        legend: {
+          position: 'top',
+          align: 'end',
+          labels: { font: { family: 'Inter', size: 12, weight: '500' }, padding: 14, boxWidth: 12, usePointStyle: true, pointStyle: 'rectRounded' }
+        },
+        tooltip: {
+          backgroundColor: COLORS.ink,
+          titleFont: { family: 'Inter', size: 12, weight: '600' },
+          bodyFont: { family: 'JetBrains Mono', size: 12 },
+          padding: 12,
+          cornerRadius: 8,
+          callbacks: {
+            label: ctx => `${ctx.dataset.label}: ${Number(ctx.parsed.y).toLocaleString('pt-BR', {maximumFractionDigits: 1})} ${meta.unidade}`
+          }
+        }
+      },
+    },
+  });
+}
+
+function renderHistoricoCompras() {
+  const tbody = document.getElementById('comprasTbody');
+  tbody.innerHTML = '';
+
+  const compras = [...state.compras].slice(0, 30);
+
+  compras.forEach(c => {
+    const meta = SKU_LABELS[c.sku] || { nome: c.sku, icon: '📦', unidade: 'un' };
+    const isEstoqueNovo = c.observacao && c.observacao.includes('ESTOQUE NOVO');
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${fmt.data(c.data)}</td>
+      <td>${meta.icon} ${meta.nome} <span style="color:var(--ink-3); font-size:0.8em;">${c.observacao || ''}</span></td>
+      <td class="num">${Number(c.quantidade).toLocaleString('pt-BR', {maximumFractionDigits: 1})} ${meta.unidade}</td>
+      <td class="num">R$ ${Number(c.valor_total).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+      <td>${isEstoqueNovo ? '<span class="badge-status badge-estoque">ESTOQUE NOVO</span>' : '<span class="badge-status badge-pago">CONSUMIDO</span>'}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderEstoque() {
+  if (!state.estoque || state.estoque.length === 0) return;
+  renderEstoqueAlerts();
+  renderEstoqueCards();
+  renderConsumoApto();
+  renderHistoricoCompras();
 }
 
 document.addEventListener('DOMContentLoaded', init);

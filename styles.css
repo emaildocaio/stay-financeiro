@@ -1047,3 +1047,222 @@ body {
   font-size: 0.88rem;
   border: 1px solid #fecaca;
 }
+
+/* =====================================================
+   ESTOQUE
+   ===================================================== */
+.section-title {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: -0.015em;
+  margin: 1.5rem 0 1rem;
+  font-variation-settings: "opsz" 24;
+}
+
+.section-title:first-child { margin-top: 0; }
+
+/* Alertas */
+.estoque-alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: 1.5rem;
+}
+
+.estoque-alert {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.9rem 1.25rem;
+  border-radius: var(--radius);
+  border: 1px solid;
+  font-size: 0.9rem;
+}
+
+.estoque-alert-icon {
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+.estoque-alert-body { flex: 1; }
+
+.estoque-alert-title {
+  font-weight: 600;
+  color: var(--ink);
+  margin-right: 0.4rem;
+}
+
+.estoque-alert-text {
+  color: var(--ink-2);
+  font-size: 0.85rem;
+}
+
+.estoque-alert.critical {
+  background: linear-gradient(135deg, var(--danger-bg) 0%, #fee2e2 100%);
+  border-color: #fca5a5;
+  border-left: 4px solid var(--danger);
+}
+.estoque-alert.critical .estoque-alert-icon { color: var(--danger); }
+
+.estoque-alert.warning {
+  background: linear-gradient(135deg, var(--areia) 0%, #fef9c3 100%);
+  border-color: var(--areia-2);
+  border-left: 4px solid var(--warn);
+}
+.estoque-alert.warning .estoque-alert-icon { color: var(--warn); }
+
+.estoque-alert.info {
+  background: linear-gradient(135deg, #ecfeff 0%, #cffafe 100%);
+  border-color: #a5f3fc;
+  border-left: 4px solid var(--turquesa);
+}
+.estoque-alert.info .estoque-alert-icon { color: var(--turquesa-2); }
+
+/* Cards de SKU */
+.estoque-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.estoque-card {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.estoque-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.estoque-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--turquesa);
+}
+
+.estoque-card.critical::before { background: var(--danger); }
+.estoque-card.warning::before { background: var(--warn); }
+.estoque-card.healthy::before { background: var(--success); }
+
+.estoque-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.estoque-card-title {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  font-variation-settings: "opsz" 24;
+}
+
+.estoque-card-status {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.2rem 0.55rem;
+  border-radius: 100px;
+  white-space: nowrap;
+}
+
+.estoque-card-status.critical { background: var(--danger-bg); color: var(--danger); }
+.estoque-card-status.warning { background: var(--warn-bg); color: var(--warn); }
+.estoque-card-status.healthy { background: var(--success-bg); color: var(--success); }
+
+.estoque-saldo {
+  font-family: var(--font-display);
+  font-size: 2.2rem;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+  line-height: 1;
+  font-variation-settings: "opsz" 144;
+  margin-bottom: 0.3rem;
+}
+
+.estoque-saldo-unit {
+  font-size: 1rem;
+  color: var(--ink-3);
+  font-weight: 400;
+  margin-left: 0.2rem;
+}
+
+.estoque-projecao {
+  font-size: 0.82rem;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  margin-bottom: 1rem;
+}
+
+.estoque-bar {
+  height: 6px;
+  background: var(--paper-2);
+  border-radius: 100px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.estoque-bar-fill {
+  height: 100%;
+  border-radius: 100px;
+  transition: width 0.6s ease-out;
+}
+
+.estoque-bar-fill.critical { background: var(--danger); }
+.estoque-bar-fill.warning { background: var(--warn); }
+.estoque-bar-fill.healthy { background: var(--success); }
+
+.estoque-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.5rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--line);
+}
+
+.estoque-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.estoque-stat-label {
+  font-size: 0.68rem;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 500;
+}
+
+.estoque-stat-value {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Status novo no histórico */
+.badge-status.badge-estoque {
+  background: #dbeafe;
+  color: #1e40af;
+}

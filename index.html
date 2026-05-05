@@ -38,6 +38,7 @@
       <button class="tab-btn" data-tab="limpeza">Limpeza &amp; Lavanderia</button>
       <button class="tab-btn" data-tab="planilha">Planilha</button>
       <button class="tab-btn" data-tab="reservas">Reservas</button>
+      <button class="tab-btn" data-tab="estoque">Estoque</button>
     </div>
   </nav>
 
@@ -312,6 +313,80 @@
         </div>
         <div class="table-footer" id="reservasFooter"></div>
       </div>
+    </section>
+
+    <!-- =========== TAB: ESTOQUE =========== -->
+    <section class="tab-content" id="tab-estoque">
+
+      <!-- Alertas de reposição -->
+      <div class="estoque-alerts" id="estoqueAlerts"></div>
+
+      <!-- Cards saldo por SKU -->
+      <h2 class="section-title">Saldo atual por item</h2>
+      <div class="estoque-grid" id="estoqueCards"></div>
+
+      <!-- Consumo mensal por apto -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Consumo estimado por apartamento</h2>
+          <div class="filter-row">
+            <select id="estoqueFilterSku">
+              <option value="DESINF">Desinfetante (L)</option>
+              <option value="AGUA_SAN">Água Sanitária (L)</option>
+              <option value="SACO_GRD">Saco de Lixo Grande</option>
+              <option value="SACO_PEQ">Saco de Lixo Pequeno (Bobina)</option>
+            </select>
+            <select id="estoqueFilterPeriodo">
+              <option value="6m">Últimos 6 meses</option>
+              <option value="12m" selected>Últimos 12 meses</option>
+              <option value="ytd">YTD 2026</option>
+              <option value="all">Tudo</option>
+            </select>
+          </div>
+        </div>
+        <div class="chart-container">
+          <canvas id="chartConsumoApto"></canvas>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Mês</th>
+                <th>IV203</th>
+                <th>IV204</th>
+                <th>BA201</th>
+                <th>BA203</th>
+                <th>BA204</th>
+                <th class="num">Total</th>
+              </tr>
+            </thead>
+            <tbody id="consumoTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Histórico de compras -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Histórico de compras</h2>
+          <span class="card-subtitle">Mercado Livre · Stay Arraial</span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Item</th>
+                <th class="num">Qty</th>
+                <th class="num">Valor</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="comprasTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
     </section>
 
   </main>
