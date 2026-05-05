@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stay Arraial — Dashboard Financeiro</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,900&family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🌊%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+  <!-- =========== TOPO =========== -->
+  <header class="hero">
+    <div class="hero-inner">
+      <div class="hero-meta">
+        <span class="kicker">STAY ARRAIAL · FINANCEIRO</span>
+        <span class="sync-badge" id="syncBadge">
+          <span class="sync-dot"></span>
+          <span id="syncText">Carregando...</span>
+        </span>
+      </div>
+      <h1 class="hero-title">
+        Resultado<br>
+        <span class="hero-accent">consolidado</span>
+      </h1>
+      <p class="hero-sub">Receitas em tempo real via Stays · Despesas do Supabase · Co-Host segregado por canal</p>
+    </div>
+  </header>
+
+  <!-- =========== NAVEGAÇÃO =========== -->
+  <nav class="tabnav">
+    <div class="tabnav-inner">
+      <button class="tab-btn active" data-tab="overview">Visão Geral</button>
+      <button class="tab-btn" data-tab="apartamentos">Por Apartamento</button>
+      <button class="tab-btn" data-tab="despesas">Despesas</button>
+      <button class="tab-btn" data-tab="reservas">Reservas</button>
+    </div>
+  </nav>
+
+  <main class="container">
+    
+    <!-- =========== TAB: VISÃO GERAL =========== -->
+    <section class="tab-content active" id="tab-overview">
+      
+      <!-- KPIs YTD -->
+      <div class="kpi-grid">
+        <div class="kpi kpi-receita">
+          <span class="kpi-label">Receita líquida YTD</span>
+          <span class="kpi-value" id="kpiReceitaYtd">—</span>
+          <span class="kpi-sub" id="kpiReceitaYtdSub">Pós comissão e co-host</span>
+        </div>
+        <div class="kpi kpi-despesa">
+          <span class="kpi-label">Despesas YTD</span>
+          <span class="kpi-value" id="kpiDespesaYtd">—</span>
+          <span class="kpi-sub" id="kpiDespesaYtdSub">Operacional + co-host</span>
+        </div>
+        <div class="kpi kpi-resultado">
+          <span class="kpi-label">Resultado YTD</span>
+          <span class="kpi-value" id="kpiResultadoYtd">—</span>
+          <span class="kpi-sub" id="kpiResultadoYtdSub">—</span>
+        </div>
+        <div class="kpi kpi-margem">
+          <span class="kpi-label">Margem YTD</span>
+          <span class="kpi-value" id="kpiMargemYtd">—</span>
+          <span class="kpi-sub" id="kpiMargemYtdSub">—</span>
+        </div>
+      </div>
+
+      <!-- Co-Host Booking Pendente -->
+      <div class="alert-card" id="cohostAlert" hidden>
+        <div class="alert-icon">⚠</div>
+        <div class="alert-body">
+          <span class="alert-title">Co-Host Booking pendente</span>
+          <span class="alert-text" id="cohostAlertText">—</span>
+        </div>
+        <button class="btn-secondary" data-tab="reservas" id="cohostAlertBtn">Ver reservas</button>
+      </div>
+
+      <!-- Gráfico Receita × Despesa -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Receita × Despesa por mês</h2>
+          <span class="card-subtitle">Últimos 12 meses</span>
+        </div>
+        <div class="chart-container">
+          <canvas id="chartReceitaDespesa"></canvas>
+        </div>
+      </div>
+
+      <!-- Tabela Resumo -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Resumo mensal</h2>
+          <div class="filter-pills" id="periodFilter">
+            <button class="pill active" data-period="12m">Últimos 12m</button>
+            <button class="pill" data-period="ytd">YTD</button>
+            <button class="pill" data-period="all">Tudo</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Mês</th>
+                <th class="num">Reservas</th>
+                <th class="num">Receita bruta</th>
+                <th class="num">Comissão plat.</th>
+                <th class="num">Co-Host total</th>
+                <th class="num">Despesas op.</th>
+                <th class="num">Resultado</th>
+                <th class="num">Margem</th>
+              </tr>
+            </thead>
+            <tbody id="resumoTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- =========== TAB: POR APARTAMENTO =========== -->
+    <section class="tab-content" id="tab-apartamentos">
+      <div class="apt-grid" id="aptGrid"></div>
+      
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Receita por apartamento ao longo do tempo</h2>
+          <span class="card-subtitle">Últimos 12 meses · pós-comissão</span>
+        </div>
+        <div class="chart-container">
+          <canvas id="chartAptos"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========== TAB: DESPESAS =========== -->
+    <section class="tab-content" id="tab-despesas">
+      <div class="card-row">
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Despesas por categoria</h2>
+            <span class="card-subtitle">YTD · em R$</span>
+          </div>
+          <div class="chart-container chart-container-sm">
+            <canvas id="chartDespesasPie"></canvas>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Top 5 categorias</h2>
+            <span class="card-subtitle">YTD</span>
+          </div>
+          <ul class="ranking-list" id="rankingCategorias"></ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Despesas por categoria por mês</h2>
+        </div>
+        <div class="chart-container">
+          <canvas id="chartDespesasStack"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========== TAB: RESERVAS =========== -->
+    <section class="tab-content" id="tab-reservas">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Reservas</h2>
+          <div class="filter-row">
+            <select id="filterPartner">
+              <option value="">Todos os canais</option>
+              <option value="airbnb">Airbnb</option>
+              <option value="booking">Booking</option>
+              <option value="direct">Direto</option>
+            </select>
+            <select id="filterApto">
+              <option value="">Todos os aptos</option>
+            </select>
+            <select id="filterPeriodo">
+              <option value="future">Futuras</option>
+              <option value="last30">Últimos 30 dias</option>
+              <option value="last90">Últimos 90 dias</option>
+              <option value="ytd">YTD</option>
+              <option value="all" selected>Tudo</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Cód.</th>
+                <th>Canal</th>
+                <th>Apto</th>
+                <th>Check-in</th>
+                <th>Noites</th>
+                <th>Hóspedes</th>
+                <th class="num">Total bruto</th>
+                <th class="num">Cleaning</th>
+                <th class="num">Comissão</th>
+                <th class="num">Co-Host</th>
+                <th class="num">Líquido</th>
+              </tr>
+            </thead>
+            <tbody id="reservasTbody"></tbody>
+          </table>
+        </div>
+        <div class="table-footer" id="reservasFooter"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <span>Stay Arraial · Dashboard Financeiro</span>
+    <span>·</span>
+    <span id="footerSync">—</span>
+    <span>·</span>
+    <button class="footer-btn" id="btnRefresh">↻ Atualizar dados</button>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
