@@ -756,6 +756,36 @@ body {
   color: var(--ink);
 }
 
+/* Sub-linha de quebra por plataforma */
+.data-table tbody tr.sub-row td {
+  background: #fafbfc;
+  font-size: 0.82rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  color: var(--ink-3);
+  border-bottom: 1px dashed var(--line);
+}
+
+.data-table tbody tr.sub-row:hover td {
+  background: var(--paper-2);
+}
+
+.cell-sub {
+  padding-left: 2.2rem !important;
+  font-size: 0.8rem;
+  color: var(--ink-3);
+}
+
+.sub-arrow {
+  color: var(--ink-4);
+  margin-right: 0.3rem;
+  font-family: var(--font-mono);
+}
+
+.cell-muted {
+  color: var(--ink-4);
+}
+
 .cell-positive { color: var(--success); }
 .cell-negative { color: var(--danger); }
 

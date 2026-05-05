@@ -201,12 +201,38 @@ function renderOverview() {
   renderChartReceitaDespesa(data);
 }
 
+function aggregateByPartnerByMonth() {
+  const result = {};
+  state.reservas.forEach(r => {
+    if (!r.check_in) return;
+    const mes = r.check_in.slice(0, 7);
+    if (!result[mes]) result[mes] = {};
+    const p = r.partner || 'direct';
+    if (!result[mes][p]) {
+      result[mes][p] = { qty: 0, bruta: 0, comissao: 0, cohost: 0 };
+    }
+    result[mes][p].qty += 1;
+    result[mes][p].bruta += Number(r.total_value || 0);
+    result[mes][p].comissao += Number(r.partner_commission || 0);
+    result[mes][p].cohost += Number(r.co_host_calc || 0);
+  });
+  return result;
+}
+
+const PARTNER_LABELS = {
+  airbnb: 'Airbnb',
+  booking: 'Booking.com',
+  direct: 'Direto',
+};
+const PARTNER_ORDER = ['airbnb', 'booking', 'direct'];
+
 function renderResumoTable(data) {
   const tbody = document.getElementById('resumoTbody');
   tbody.innerHTML = '';
-  
+
+  const partnerByMonth = aggregateByPartnerByMonth();
   let totQty = 0, totRec = 0, totCom = 0, totCo = 0, totDesp = 0, totRes = 0;
-  
+
   data.forEach(r => {
     const tr = document.createElement('tr');
     const resCls = r.resultado >= 0 ? 'cell-positive' : 'cell-negative';
@@ -221,7 +247,28 @@ function renderResumoTable(data) {
       <td class="num">${fmt.pct(r.margem_pct)}</td>
     `;
     tbody.appendChild(tr);
-    
+
+    // Sub-linhas: quebra por plataforma
+    const mesKey = r.mes.slice(0, 7);
+    const partners = partnerByMonth[mesKey] || {};
+    PARTNER_ORDER.forEach(p => {
+      const d = partners[p];
+      if (!d || d.qty === 0) return;
+      const subTr = document.createElement('tr');
+      subTr.className = 'sub-row';
+      subTr.innerHTML = `
+        <td class="cell-sub"><span class="sub-arrow">↳</span> <span class="badge-canal badge-${p}">${PARTNER_LABELS[p]}</span></td>
+        <td class="num">${d.qty}</td>
+        <td class="num">${fmt.brl(d.bruta)}</td>
+        <td class="num">${fmt.brl(d.comissao)}</td>
+        <td class="num">${fmt.brl(d.cohost)}</td>
+        <td class="num cell-muted">—</td>
+        <td class="num cell-muted">—</td>
+        <td class="num cell-muted">—</td>
+      `;
+      tbody.appendChild(subTr);
+    });
+
     totQty += r.qty_reservas;
     totRec += Number(r.receita_bruta);
     totCom += Number(r.comissao_plataforma);
